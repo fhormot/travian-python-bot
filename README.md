@@ -1,6 +1,6 @@
 ## Basic use
 
-```
+```python
 from Travian import Travian
 
 url_main = 'https://ts1.balkans.travian.com/'
