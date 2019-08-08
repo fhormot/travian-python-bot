@@ -8,5 +8,12 @@ links = {
 }
 
 actions = {
-    'armySend': 'build.php?tt=2&id=39'
+    'armySend': 'build.php?tt=2&id=39',
+    'building': 'build.php',
+}
+
+army = {
+    'support': '2',
+    'attack': '3',
+    'raid': '4',
 }

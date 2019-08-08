@@ -1,3 +1,5 @@
 geckodriver
+__pycache__/
+
 *.log
 app.py
