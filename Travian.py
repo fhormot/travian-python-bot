@@ -1,6 +1,7 @@
 from selenium import webdriver
-import re
 from values import *
+import re
+import time
 
 
 class Travian:
@@ -119,14 +120,95 @@ class Travian:
         if(self.checkBuildingAvailability(bid)):
             pass
 
-    def sendArmy(self, xCoord, yCoord, armyValues):
+    def sendArmy(self, coord, armyValues, type):
         if(self.returnLink() != actions['armySend']):
             self.switchPage(actions['armySend'])
 
-        self.browser.find_element_by_id('xCoordInput').send_keys(xCoord)
-        self.browser.find_element_by_id('yCoordInput').send_keys(yCoord)
+        self.browser.find_element_by_id('xCoordInput').send_keys(coord[0])
+        self.browser.find_element_by_id('yCoordInput').send_keys(coord[1])
 
         troops = self.browser.find_element_by_id('troops')
 
-        for unit, quant in zip(troops.find_elements_by_css_selector('input'), armyValues):
-            unit.send_keys(str(quant))
+        for unit in troops.find_elements_by_css_selector('input'):
+            index = int(unit.get_attribute('name')[1:]) - 1
+            # print(index, str(armyValues[index]))
+            if(armyValues[index]):
+                unit.send_keys(str(armyValues[index]))
+
+        options = self.browser.find_element_by_class_name('option')
+        for radio in options.find_elements_by_css_selector('input'):
+            if radio.get_attribute('value') == str(type):
+                radio.click()
+
+        self.browser.find_element_by_id('btn_ok').click()
+        self.browser.find_element_by_id('btn_ok').click()
+
+    def buildArmy(self, armyValues, max=False):
+        if(self.returnLink() != actions['barracks']):
+            self.switchPage(actions['barracks'])
+
+        # availableTropps =
+
+        for unit in self.browser.find_elements_by_class_name('details'):
+            unitBox = unit.find_element_by_css_selector('input')
+            index = int(unitBox.get_attribute('name')[1:]) - 1
+
+            try:
+                if(armyValues[index]):
+                    # unit.send_keys(str(armyValues[index]))
+                    if(max):
+                        maxLink = unit.find_element_by_class_name(
+                            'cta').find_element_by_css_selector('a')
+
+                        if(int(maxLink.text)):
+                            maxLink.click()
+            except:
+                print(index)
+
+        self.browser.find_element_by_id('s1').click()
+
+    def switchVillage(self, villageName):
+        # TODO: check current page!
+
+        villageList = self.browser.find_element_by_id('sidebarBoxVillagelist')
+
+        for village in villageList.find_elements_by_css_selector('li'):
+            if(village.find_element_by_class_name('name').text == villageName):
+                print(f'Found {villageName}')
+                village.find_element_by_css_selector('a').click()
+                break
+
+        time.sleep(2)
+
+    def villageList(self):
+        list = []
+
+        villageList = self.browser.find_element_by_id('sidebarBoxVillagelist')
+        for village in villageList.find_elements_by_css_selector('li'):
+            villageName = village.find_element_by_class_name('name').text
+
+            villageCoordXRaw = village.find_element_by_class_name(
+                'coordinateX').text
+            villageCoordYRaw = village.find_element_by_class_name(
+                'coordinateY').text
+
+            print(villageCoordXRaw, villageCoordYRaw)
+
+            villageCoordX = re.findall(r'[ -~]', villageCoordXRaw)
+            villageCoordY = re.findall(r'[ -~]', villageCoordYRaw)
+
+            villageCoordX = ''.join(villageCoordX)
+            villageCoordY = ''.join(villageCoordY)
+
+            # print(villageCoordX, villageCoordY)
+
+            list.append(Village(villageName, villageCoordX, villageCoordY))
+
+        return list
+
+
+class Village:
+    def __init__(self, name, coordX, coordY):
+        self.name = name
+        self.coordX = coordX
+        self.coordY = coordY
