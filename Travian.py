@@ -1,4 +1,5 @@
 from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
 from values import *
 import re
 import time
@@ -13,10 +14,17 @@ class Travian:
         self.url = url
 
         self.browser = webdriver.Firefox()
+
         self.browser.get(self.url)
 
     def stop(self):
         self.browser.quit()
+
+    def unzoom(self):
+        self.browser.execute_script(
+            'document.body.style.MozTransform = "scale(0.50)";')
+        self.browser.execute_script(
+            'document.body.style.MozTransformOrigin = "0 0";')
 
     def switchPage(self, page):
         self.browser.get(self.url+page)
@@ -45,6 +53,7 @@ class Travian:
             'text').send_keys(self.username)
         self.browser.find_element_by_name('password').send_keys(self.password)
         self.browser.find_element_by_id('lowRes').click()
+
         self.browser.find_element_by_id('s1').click()
 
         self.housekeepingResources()
@@ -116,6 +125,7 @@ class Travian:
 
         return False
 
+    # TODO Finish method
     def build(self, bid):
         if(self.checkBuildingAvailability(bid)):
             pass
@@ -147,7 +157,7 @@ class Travian:
         if(self.returnLink() != actions['barracks']):
             self.switchPage(actions['barracks'])
 
-        # availableTropps =
+        self.unzoom()
 
         for unit in self.browser.find_elements_by_class_name('details'):
             unitBox = unit.find_element_by_css_selector('input')
@@ -174,11 +184,11 @@ class Travian:
 
         for village in villageList.find_elements_by_css_selector('li'):
             if(village.find_element_by_class_name('name').text == villageName):
-                print(f'Found {villageName}')
+                # print(f'Found {villageName}')
                 village.find_element_by_css_selector('a').click()
                 break
 
-        time.sleep(2)
+        # time.sleep(2)
 
     def villageList(self):
         list = []
@@ -194,8 +204,12 @@ class Travian:
 
             print(villageCoordXRaw, villageCoordYRaw)
 
-            villageCoordX = re.findall(r'[ -~]', villageCoordXRaw)
-            villageCoordY = re.findall(r'[ -~]', villageCoordYRaw)
+            for y in villageCoordYRaw:
+                if y == '−‭':
+                    print("True")
+
+            villageCoordX = re.findall(r'\d+', villageCoordXRaw)
+            villageCoordY = re.findall(r'\d+', villageCoordYRaw)
 
             villageCoordX = ''.join(villageCoordX)
             villageCoordY = ''.join(villageCoordY)
@@ -205,6 +219,107 @@ class Travian:
             list.append(Village(villageName, villageCoordX, villageCoordY))
 
         return list
+
+    def checkRaid(self, seconds=False):
+        if(self.returnLink() != actions['armyMovement']):
+            self.switchPage(actions['armyMovement'])
+
+        raids = []
+
+        raidTable = self.browser.find_elements_by_class_name('inRaid')
+
+        for el in raidTable:
+            timingIn = el.find_element_by_class_name('in').text[3:-5]
+            raids.append(timingIn)
+
+        if seconds:
+            attackSeconds = []
+
+            for time in raids:
+                seconds = sum(x * int(t)
+                              for x, t in zip([3600, 60, 1], time.split(":")))
+                attackSeconds.append(seconds)
+
+            return attackSeconds
+
+        return raids
+
+    def quickFS(self, coord, type):
+        if(self.returnLink() != actions['armySend']):
+            self.switchPage(actions['armySend'])
+
+        troops = self.browser.find_element_by_id('troops')
+
+        # Number of sent troops
+        total = 0
+
+        for unit in troops.find_elements_by_css_selector('a'):
+            total += 1
+            unit.click()
+
+        if not total:
+            # Nothing to send
+            return
+
+        self.browser.find_element_by_id('xCoordInput').send_keys(str(coord[0]))
+        self.browser.find_element_by_id('yCoordInput').send_keys(str(coord[1]))
+
+        options = self.browser.find_element_by_class_name('option')
+        for radio in options.find_elements_by_css_selector('input'):
+            if radio.get_attribute('value') == str(type):
+                radio.click()
+
+        self.browser.find_element_by_id('btn_ok').click()
+        self.browser.find_element_by_id('btn_ok').click()
+
+        self.switchPage(actions['armyMovement'])
+        self.unzoom()
+
+        time.sleep(5)
+
+        element = 'outSupply'
+
+        if type == 4:
+            element = 'outRaid'
+            # TODO: type == 3
+
+        army = self.browser.find_elements_by_class_name(element)
+
+        for unit in army:
+            try:
+                unit.find_element_by_tag_name('button').click()
+                print('Returning army')
+                break
+            except:
+                pass
+
+    def longFS(self, coord, type):
+        if(self.returnLink() != actions['armySend']):
+            self.switchPage(actions['armySend'])
+
+        troops = self.browser.find_element_by_id('troops')
+
+        # Number of sent troops
+        total = 0
+
+        for unit in troops.find_elements_by_css_selector('a'):
+            total += 1
+            unit.click()
+
+        if not total:
+            # Nothing to send
+            return
+
+        self.browser.find_element_by_id('xCoordInput').send_keys(str(coord[0]))
+        self.browser.find_element_by_id('yCoordInput').send_keys(str(coord[1]))
+
+        options = self.browser.find_element_by_class_name('option')
+        for radio in options.find_elements_by_css_selector('input'):
+            if radio.get_attribute('value') == str(type):
+                radio.click()
+
+        self.browser.find_element_by_id('btn_ok').click()
+        self.browser.find_element_by_id('btn_ok').click()
 
 
 class Village:

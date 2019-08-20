@@ -9,4 +9,5 @@ password = 'password'
 
 T = Travian(username, password, url_main)
 T.login()
+T.mapProduction()
 ```
