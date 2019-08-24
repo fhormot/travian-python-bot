@@ -28,6 +28,7 @@ class Travian:
 
     def switchPage(self, page):
         self.browser.get(self.url+page)
+        self.unzoom()
 
     def returnLink(self):
         return self.browser.current_url[(len(self.url)):]
@@ -188,6 +189,8 @@ class Travian:
                 village.find_element_by_css_selector('a').click()
                 break
 
+        self.unzoom()
+
         # time.sleep(2)
 
     def villageList(self):
@@ -244,7 +247,7 @@ class Travian:
 
         return raids
 
-    def quickFS(self, coord, type):
+    def quickFS(self, coord, type, gapTime):
         if(self.returnLink() != actions['armySend']):
             self.switchPage(actions['armySend'])
 
@@ -275,7 +278,7 @@ class Travian:
         self.switchPage(actions['armyMovement'])
         self.unzoom()
 
-        time.sleep(5)
+        time.sleep(min(gapTime, 90))
 
         element = 'outSupply'
 
