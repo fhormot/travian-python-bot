@@ -1,6 +1,8 @@
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 from PIL import Image
 import pytesseract
@@ -8,9 +10,9 @@ from io import BytesIO
 
 import re
 import time
+from pprint import pprint
 
 from values import *
-
 
 class Travian:
 
@@ -21,9 +23,10 @@ class Travian:
         self.url = url
 
         self.browser = webdriver.Firefox()
+        self.browser.set_window_position(-1920,0)
         #Tesseract-OCR
-        # pytesseract.pytesseract.tesseract_cmd = 'C:/OCR/Tesseract-OCR/tesseract.exe'
         pytesseract.pytesseract.tesseract_cmd = r'C:\Users\hormot\AppData\Local\Programs\Tesseract-OCR\tesseract.exe'
+        pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
         self.browser.get(self.url)
 
@@ -64,25 +67,21 @@ class Travian:
         self.browser.find_element('name','pw').send_keys(self.password)
         # self.browser.find_element('id','lowRes').click()
 
-
         #TODO: Monitor captcha input
-        # captcha_element = self.browser.find_element(By.CLASS_NAME, 'captcha').find_element(By.TAG_NAME, 'img')
-        # captcha_image = captcha_element.screenshot_as_png
+        captcha_element = self.browser.find_element(By.CLASS_NAME, 'captcha').find_element(By.TAG_NAME, 'img')
+        captcha_image = captcha_element.screenshot_as_png
 
-        # image = Image.open(BytesIO(captcha_image))
+        image = Image.open(BytesIO(captcha_image))
+        custom_config = r'--oem 1 --psm 9 -c tessedit_char_whitelist=0123456789'
+        captcha_text = pytesseract.image_to_string(image, config=custom_config)
         # captcha_text = pytesseract.image_to_string(image, config='--psm 8 --oem 3')
 
-        # print(f'Captcha: {captcha_text}')
+        captcha_input = self.browser.find_element(By.NAME, 'captcha').send_keys(captcha_text)
 
-        # login_table = self.browser.find_element(By.CLASS_NAME, 'loginTable')
-        # input_fields = login_table.find_elements(By.TAG_NAME, 'input')
-        # last_input_field = input_fields[-1]
-        # last_input_field.send_keys(captcha_text)
+        while self.returnLink() != links['resources']:
+            time.sleep(0.5)
 
-        time.sleep(15)
-
-
-        self.browser.find_element('id', 's1').click()
+        # self.browser.find_element('id', 's1').click()
 
         self.housekeepingResources()
 
@@ -349,8 +348,6 @@ class Travian:
 
         buildings = [(img.get_attribute('alt'), img.get_attribute('class')) for img in img_tags]
 
-        print(buildings)
-
         def insert_spaces(text):
             text_array = re.sub(r'([a-z])([A-Z0-9])', r'\1 \2', text)
 
@@ -371,7 +368,14 @@ class Travian:
         # Convert the second element of the tuple into an integer
         buildings = [(building[0], int(building[1])) for building in buildings]  
 
-        return buildings
+        buildings_dict = {}
+        for building in buildings:
+            if building[0] not in buildings_dict:
+                buildings_dict[building[0]] = [building[1]]
+            else:
+                buildings_dict[building[0]].append(building[1])
+        
+        return buildings_dict
 
     def get_resource_levels(self):
         if(self.returnLink() != links['resources']):
@@ -385,30 +389,44 @@ class Travian:
     
     def switch_resource(self, id):
         # if(self.returnLink() != actions['resource']):
-        self.switchPage(f'{actions['resource']}{id}')
+        self.switchPage(f"{actions['resource']}{id}")
 
     def build_field(self, id):
         self.switch_resource(id)
 
         try:
-            build_button = self.browser.find_element(By.XPATH, "//button[@value='Upgrade level']")
+            # build_button = self.browser.find_element(By.XPATH, "//button[@value='Upgrade level']")
+            contract_element = self.browser.find_element(By.ID, 'contract')
+
+            build_button = contract_element.find_element(By.TAG_NAME, 'button')
+            WebDriverWait(self.browser, 10).until(EC.element_to_be_clickable(build_button))
+            
+            clock_element = contract_element.find_element(By.CLASS_NAME, 'clocks')
+            clock_text = clock_element.text
+
+            h, m, s = map(int, clock_text.split(':'))
+            total_seconds = h * 3600 + m * 60 + s
+
             build_button.click()
 
             while self.returnLink() != links['resources']:
                 time.sleep(0.5)
 
-            return True
+            return total_seconds
         except:
             return False
         
-    def max_resources(self):
+    def max_resources(self, max_level = 10):
         resource_levels = self.get_resource_levels()
 
         for index, level in enumerate(resource_levels):
-            while level < 10:
+            while level < max_level:
                 print(f"Building field at index {index} with current level {level}")
-                self.build_field(index + 1)
-                time.sleep(1)  # Adjust sleep time as needed
+                wait = self.build_field(index + 1)
+
+                if wait:
+                    time.sleep(wait)  # Adjust sleep time as needed
+
                 resource_levels = self.get_resource_levels()
                 level = resource_levels[index]
 
@@ -420,17 +438,26 @@ class Travian:
 
         id_list = {}
 
-        for id in id_range:
-            self.switchPage(f'build.php?id={id}')
-            # time.sleep()
+        tabs = []
 
+        for id in id_range:
+            self.browser.execute_script(f"window.open('');")
+            self.browser.switch_to.window(self.browser.window_handles[-1])
+            self.browser.get(f'{self.url}build.php?id={id}')
+            tabs.append(self.browser.current_window_handle)
+
+        for tab in tabs:
+            self.browser.switch_to.window(tab)
             try:
+                WebDriverWait(self.browser, 30).until(EC.presence_of_element_located((By.XPATH, "//h1[@class='titleInHeader']")))
+
                 header = self.browser.find_element(By.XPATH, "//h1[@class='titleInHeader']")
                 building_name = header.text.split(" Level")[0]
 
                 id_list[building_name] = id
 
                 # print(f"ID: {id}, Title: {header.text}")
+                self.browser.close()
             except:
                 pass
 
@@ -470,60 +497,81 @@ class Travian:
         return False
     
     def upgrade_building(self, id):
-        link_suffix = f'{actions['city']}{id}'
+        link_suffix = f"{actions['city']}{id}"
         self.switchPage(link_suffix)
 
         try:
-            build_button = self.browser.find_element(By.XPATH, "//button[@value='Upgrade level']")
-            build_button.click()
+            # Check if already max update
+            contract_element = self.browser.find_element(By.ID, 'content')
+            if "completely upgraded" in contract_element.text:
+                return 0
 
-            clock_element = self.browser.find_element(By.CLASS_NAME, 'clocks')
+            max_refresh = 5
+            for idx in range(max_refresh):
+                try:
+                    contract_element = self.browser.find_element(By.ID, 'contract')
+                    break
+                except:
+                    print(f"Retrying upgrade attempt: {idx}")
+                    self.browser.refresh()
+                    time.sleep(0.5)
+
+            build_button = contract_element.find_element(By.TAG_NAME, 'button')
+            WebDriverWait(self.browser, 10).until(EC.element_to_be_clickable(build_button))
+            
+            clock_element = contract_element.find_element(By.CLASS_NAME, 'clocks')
             clock_text = clock_element.text
+
             h, m, s = map(int, clock_text.split(':'))
             total_seconds = h * 3600 + m * 60 + s
+
+            build_button.click()
 
             while self.returnLink() != links['buildings']:
                 time.sleep(0.5)
 
             return total_seconds
-        except:
-            return False
-        
-    def max_buildings(self, buildings):
-        ids = self.id_matcher()
-        levels = self.get_buildings_and_levels()
-        print(levels)
-
-        building_dict = {}
-
-        try:
-            for building in buildings:
-                building_dict[building] = {
-                'levels': levels[building],
-                'id': ids[building]
-                }
-                print(f'{building} - {building_dict[building]}')
-
-            print(building_dict)
         except Exception as e:
             print(e)
+            return False
+        
+    def max_buildings(self, buildings, level=20):
+        ids = self.id_matcher()
+        levels = self.get_buildings_and_levels()
 
-        return True
-
+        building_dict = {}
         for building in buildings:
-            building_level = int(levels[building][0])
+            if not building in list(levels.keys()):
+                print(f'{building} not found')
+                continue
 
-            if building_level < 20:
-                print(f'{building} level: {building_level}')
+            if not building in list(ids.keys()):
+                continue
 
-                for i in range(building_level, 20):
-                    print(f'Upgrading {building} to level {i + 1}. Building ID is {ids[building]}')
-                    wait = self.upgrade_building(ids[building])
-                    
-                    if wait:
-                        time.sleep(wait)
+            building_dict[building] = {
+            'level': levels[building] if levels[building] else None,
+            'id': ids[building] if ids[building] else None
+            }
+
+        for key, building in building_dict.items():
+            building_id = building['id']
+            building_level = building['level'][0]
+
+            if building_level >= level:
+                print(f'{key}: Level already satisfied')
+                continue
+
+            if building_level < level:
+                pprint(f'{key}: id: {building_id} level: {building_level}')
+
+                for i in range(building_level, level):
+                    print(f'Upgrading {building} to level {i + 1}. Building ID is {building_id}')
+                    wait = self.upgrade_building(building_id)
+
+                    if wait == False:
+                        time.sleep(wait+1)
                     else:
-                        print(f"Failed to upgrade {building} at level {i}")
+                        print(f"Failed to upgrade {key} at level {i}")
                         break
 
         return True

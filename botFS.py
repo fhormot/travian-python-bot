@@ -4,19 +4,22 @@ from userData import *
 import time
 import random
 
+from pprint import pprint
+
 def main():
     T = Travian(username, password, url_main)
 
     try:
         T.login()
 
-        # T.build_new_building('Granary')
+        ids = T.id_matcher()
+        pprint(ids)
 
-        # T.stop()
-        # exit()
+        T.stop()
+        exit()
         
         buildings = [
-            'Main Building'
+            'Main Building',
             'Warehouse',
             'Granary',
             'City Wall',
