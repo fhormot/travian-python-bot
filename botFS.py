@@ -11,12 +11,6 @@ def main():
 
     try:
         T.login()
-
-        ids = T.id_matcher()
-        pprint(ids)
-
-        T.stop()
-        exit()
         
         buildings = [
             'Main Building',
